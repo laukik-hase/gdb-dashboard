@@ -333,10 +333,14 @@ def fetch_breakpoints(watchpoints=False, pending=False):
         if not line or not line[0].isdigit():
             continue
         # extract breakpoint number, address and pending status
-        fields = line.split()
+        if "hw breakpoint" in line:
+            fields = line.split()
+            del fields[1]
+        else:
+            fields = line.split()
         number = int(fields[0].split('.')[0])
         try:
-            if len(fields) >= 5 and fields[1] == 'breakpoint':
+            if len(fields) >= 5 and fields[1] in ('breakpoint', 'hw breakpoint'):
                 # multiple breakpoints have no address yet
                 is_pending = fields[4] == '<PENDING>'
                 is_multiple = fields[4] == '<MULTIPLE>'
@@ -371,7 +375,7 @@ def fetch_breakpoints(watchpoints=False, pending=False):
         is_pending = getattr(gdb_breakpoint, 'pending', is_pending)
         if not pending and is_pending:
             continue
-        if not watchpoints and gdb_breakpoint.type != gdb.BP_BREAKPOINT:
+        if not watchpoints and gdb_breakpoint.type not in (gdb.BP_BREAKPOINT, gdb.BP_HARDWARE_BREAKPOINT):
             continue
         # add useful fields to the object
         breakpoint = dict()
@@ -2273,6 +2277,7 @@ class Breakpoints(Dashboard.Module):
 
     NAMES = {
         gdb.BP_BREAKPOINT: 'break',
+        gdb.BP_HARDWARE_BREAKPOINT: 'hw break',
         gdb.BP_WATCHPOINT: 'watch',
         gdb.BP_HARDWARE_WATCHPOINT: 'write watch',
         gdb.BP_READ_WATCHPOINT: 'read watch',
@@ -2297,7 +2302,7 @@ class Breakpoints(Dashboard.Module):
             if not R.ansi and breakpoint['enabled']:
                 bp_type = 'disabled ' + bp_type
             line = '[{}] {}'.format(number, bp_type)
-            if breakpoint['type'] == gdb.BP_BREAKPOINT:
+            if breakpoint['type'] in (gdb.BP_BREAKPOINT, gdb.BP_HARDWARE_BREAKPOINT):
                 for i, address in enumerate(breakpoint['addresses']):
                     addr = address['address']
                     if i == 0 and addr:
@@ -2369,6 +2374,11 @@ set print pretty on
 set print array off
 set print array-indexes on
 set python print-stack full
+
+# ESP-IDF defaults ----------------------------------------------------------
+
+target remote :3333
+set remote hardware-watchpoint-limit 2
 
 # Start ------------------------------------------------------------------------
 
